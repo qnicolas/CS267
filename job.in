@@ -8,6 +8,7 @@
 #SBATCH -J job-@BENCHMARK@
 #SBATCH -o job-@BENCHMARK@.o%j
 #SBATCH -e job-@BENCHMARK@.e%j
+#SBATCH --account=mp309
 
 export OMP_NUM_THREADS=1
 srun -N 1 -n 1 --cpu-freq=3500000 ./benchmark-@BENCHMARK@
