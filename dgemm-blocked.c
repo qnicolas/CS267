@@ -13,276 +13,74 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 #endif
 
 #ifndef MICROKERNEL_ISIZE
-#define MICROKERNEL_ISIZE 8
-#define MICROKERNEL_KSIZE 8
+#define MICROKERNEL_ISIZE 4
+#define MICROKERNEL_KSIZE 4
 #endif
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) < (b)) ? (b) : (a))
 
-static void micro_kernel_8by8(double* A, double* B, double* C) {
+static void micro_kernel_4by4(double* A, double* B, double* C) {
     // Declare
-    __m256d Ar00,Ar01,Ar02,Ar03,Ar04,Ar05,Ar06,Ar07,Ar10,Ar11,Ar12,Ar13,Ar14,Ar15,Ar16,Ar17;
-    __m256d Br0,Br1,Br2,Br3,Br4,Br5,Br6,Br7;
-    __m256d Cr00,Cr01,Cr02,Cr03,Cr04,Cr05,Cr06,Cr07,Cr10,Cr11,Cr12,Cr13,Cr14,Cr15,Cr16,Cr17;
+    __m256d Ar00,Ar01,Ar02,Ar03;
+    __m256d Br0,Br1,Br2,Br3;
+    __m256d Cr00,Cr01,Cr02,Cr03;
+    
     Ar00 = _mm256_load_pd(A + 0 + 0 * MICROKERNEL_ISIZE);
-    Ar10 = _mm256_load_pd(A + 4 + 0 * MICROKERNEL_ISIZE);
     Ar01 = _mm256_load_pd(A + 0 + 1 * MICROKERNEL_ISIZE);
-    Ar11 = _mm256_load_pd(A + 4 + 1 * MICROKERNEL_ISIZE);
     Ar02 = _mm256_load_pd(A + 0 + 2 * MICROKERNEL_ISIZE);
-    Ar12 = _mm256_load_pd(A + 4 + 2 * MICROKERNEL_ISIZE);
     Ar03 = _mm256_load_pd(A + 0 + 3 * MICROKERNEL_ISIZE);
-    Ar13 = _mm256_load_pd(A + 4 + 3 * MICROKERNEL_ISIZE);
-    Ar04 = _mm256_load_pd(A + 0 + 4 * MICROKERNEL_ISIZE);
-    Ar14 = _mm256_load_pd(A + 4 + 4 * MICROKERNEL_ISIZE);
-    Ar05 = _mm256_load_pd(A + 0 + 5 * MICROKERNEL_ISIZE);
-    Ar15 = _mm256_load_pd(A + 4 + 5 * MICROKERNEL_ISIZE);
-    Ar06 = _mm256_load_pd(A + 0 + 6 * MICROKERNEL_ISIZE);
-    Ar16 = _mm256_load_pd(A + 4 + 6 * MICROKERNEL_ISIZE);
-    Ar07 = _mm256_load_pd(A + 0 + 7 * MICROKERNEL_ISIZE);
-    Ar17 = _mm256_load_pd(A + 4 + 7 * MICROKERNEL_ISIZE);
 
     Cr00 = _mm256_load_pd(C + 0 + 0 * MICROKERNEL_ISIZE);
-    Cr10 = _mm256_load_pd(C + 4 + 0 * MICROKERNEL_ISIZE);
     Cr01 = _mm256_load_pd(C + 0 + 1 * MICROKERNEL_ISIZE);
-    Cr11 = _mm256_load_pd(C + 4 + 1 * MICROKERNEL_ISIZE);
     Cr02 = _mm256_load_pd(C + 0 + 2 * MICROKERNEL_ISIZE);
-    Cr12 = _mm256_load_pd(C + 4 + 2 * MICROKERNEL_ISIZE);
     Cr03 = _mm256_load_pd(C + 0 + 3 * MICROKERNEL_ISIZE);
-    Cr13 = _mm256_load_pd(C + 4 + 3 * MICROKERNEL_ISIZE);
-    Cr04 = _mm256_load_pd(C + 0 + 4 * MICROKERNEL_ISIZE);
-    Cr14 = _mm256_load_pd(C + 4 + 4 * MICROKERNEL_ISIZE);
-    Cr05 = _mm256_load_pd(C + 0 + 5 * MICROKERNEL_ISIZE);
-    Cr15 = _mm256_load_pd(C + 4 + 5 * MICROKERNEL_ISIZE);
-    Cr06 = _mm256_load_pd(C + 0 + 6 * MICROKERNEL_ISIZE);
-    Cr16 = _mm256_load_pd(C + 4 + 6 * MICROKERNEL_ISIZE);
-    Cr07 = _mm256_load_pd(C + 0 + 7 * MICROKERNEL_ISIZE);
-    Cr17 = _mm256_load_pd(C + 4 + 7 * MICROKERNEL_ISIZE);
 
-    //// First pass
+    //// 1 th pass
     Br0 = _mm256_set1_pd(B[0 + 0 * MICROKERNEL_KSIZE]);
     Cr00 = _mm256_fmadd_pd(Ar00,Br0,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar10,Br0,Cr10);
     Br1 = _mm256_set1_pd(B[1 + 1 * MICROKERNEL_KSIZE]);
     Cr01 = _mm256_fmadd_pd(Ar01,Br1,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar11,Br1,Cr11);
     Br2 = _mm256_set1_pd(B[2 + 2 * MICROKERNEL_KSIZE]);
     Cr02 = _mm256_fmadd_pd(Ar02,Br2,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar12,Br2,Cr12);
     Br3 = _mm256_set1_pd(B[3 + 3 * MICROKERNEL_KSIZE]);
     Cr03 = _mm256_fmadd_pd(Ar03,Br3,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar13,Br3,Cr13);
-    Br4 = _mm256_set1_pd(B[4 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar04,Br4,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar14,Br4,Cr14);
-    Br5 = _mm256_set1_pd(B[5 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar05,Br5,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar15,Br5,Cr15);
-    Br6 = _mm256_set1_pd(B[6 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar06,Br6,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar16,Br6,Cr16);
-    Br7 = _mm256_set1_pd(B[7 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar07,Br7,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar17,Br7,Cr17);
 
-    //// Second pass
-    Br7 = _mm256_set1_pd(B[7 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar07,Br7,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar17,Br7,Cr10);
-    Br0 = _mm256_set1_pd(B[0 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar00,Br0,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar10,Br0,Cr11);
-    Br1 = _mm256_set1_pd(B[1 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar01,Br1,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar11,Br1,Cr12);
-    Br2 = _mm256_set1_pd(B[2 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar02,Br2,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar12,Br2,Cr13);
-    Br3 = _mm256_set1_pd(B[3 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar03,Br3,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar13,Br3,Cr14);
-    Br4 = _mm256_set1_pd(B[4 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar04,Br4,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar14,Br4,Cr15);
-    Br5 = _mm256_set1_pd(B[5 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar05,Br5,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar15,Br5,Cr16);
-    Br6 = _mm256_set1_pd(B[6 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar06,Br6,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar16,Br6,Cr17);
-
-    //// Third pass
-    Br6 = _mm256_set1_pd(B[6 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar06,Br6,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar16,Br6,Cr10);
-    Br7 = _mm256_set1_pd(B[7 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar07,Br7,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar17,Br7,Cr11);
-    Br0 = _mm256_set1_pd(B[0 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar00,Br0,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar10,Br0,Cr12);
-    Br1 = _mm256_set1_pd(B[1 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar01,Br1,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar11,Br1,Cr13);
-    Br2 = _mm256_set1_pd(B[2 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar02,Br2,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar12,Br2,Cr14);
-    Br3 = _mm256_set1_pd(B[3 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar03,Br3,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar13,Br3,Cr15);
-    Br4 = _mm256_set1_pd(B[4 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar04,Br4,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar14,Br4,Cr16);
-    Br5 = _mm256_set1_pd(B[5 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar05,Br5,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar15,Br5,Cr17);
-
-    //// Fourth pass
-    Br5 = _mm256_set1_pd(B[5 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar05,Br5,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar15,Br5,Cr10);
-    Br6 = _mm256_set1_pd(B[6 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar06,Br6,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar16,Br6,Cr11);
-    Br7 = _mm256_set1_pd(B[7 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar07,Br7,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar17,Br7,Cr12);
-    Br0 = _mm256_set1_pd(B[0 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar00,Br0,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar10,Br0,Cr13);
-    Br1 = _mm256_set1_pd(B[1 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar01,Br1,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar11,Br1,Cr14);
-    Br2 = _mm256_set1_pd(B[2 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar02,Br2,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar12,Br2,Cr15);
-    Br3 = _mm256_set1_pd(B[3 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar03,Br3,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar13,Br3,Cr16);
-    Br4 = _mm256_set1_pd(B[4 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar04,Br4,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar14,Br4,Cr17);
-
-    //// Fifth pass
-    Br4 = _mm256_set1_pd(B[4 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar04,Br4,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar14,Br4,Cr10);
-    Br5 = _mm256_set1_pd(B[5 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar05,Br5,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar15,Br5,Cr11);
-    Br6 = _mm256_set1_pd(B[6 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar06,Br6,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar16,Br6,Cr12);
-    Br7 = _mm256_set1_pd(B[7 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar07,Br7,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar17,Br7,Cr13);
-    Br0 = _mm256_set1_pd(B[0 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar00,Br0,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar10,Br0,Cr14);
-    Br1 = _mm256_set1_pd(B[1 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar01,Br1,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar11,Br1,Cr15);
-    Br2 = _mm256_set1_pd(B[2 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar02,Br2,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar12,Br2,Cr16);
-    Br3 = _mm256_set1_pd(B[3 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar03,Br3,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar13,Br3,Cr17);
-
-    //// Sixth pass
-    Br3 = _mm256_set1_pd(B[3 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar03,Br3,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar13,Br3,Cr10);
-    Br4 = _mm256_set1_pd(B[4 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar04,Br4,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar14,Br4,Cr11);
-    Br5 = _mm256_set1_pd(B[5 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar05,Br5,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar15,Br5,Cr12);
-    Br6 = _mm256_set1_pd(B[6 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar06,Br6,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar16,Br6,Cr13);
-    Br7 = _mm256_set1_pd(B[7 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar07,Br7,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar17,Br7,Cr14);
-    Br0 = _mm256_set1_pd(B[0 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar00,Br0,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar10,Br0,Cr15);
-    Br1 = _mm256_set1_pd(B[1 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar01,Br1,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar11,Br1,Cr16);
-    Br2 = _mm256_set1_pd(B[2 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar02,Br2,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar12,Br2,Cr17);
-
-    //// Seventh pass
-    Br2 = _mm256_set1_pd(B[2 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar02,Br2,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar12,Br2,Cr10);
-    Br3 = _mm256_set1_pd(B[3 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar03,Br3,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar13,Br3,Cr11);
-    Br4 = _mm256_set1_pd(B[4 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar04,Br4,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar14,Br4,Cr12);
-    Br5 = _mm256_set1_pd(B[5 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar05,Br5,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar15,Br5,Cr13);
-    Br6 = _mm256_set1_pd(B[6 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar06,Br6,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar16,Br6,Cr14);
-    Br7 = _mm256_set1_pd(B[7 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar07,Br7,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar17,Br7,Cr15);
-    Br0 = _mm256_set1_pd(B[0 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar00,Br0,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar10,Br0,Cr16);
-    Br1 = _mm256_set1_pd(B[1 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar01,Br1,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar11,Br1,Cr17);
-
-    //// Eighth pass
+    //// 2 th pass
     Br1 = _mm256_set1_pd(B[1 + 0 * MICROKERNEL_KSIZE]);
     Cr00 = _mm256_fmadd_pd(Ar01,Br1,Cr00);
-    Cr10 = _mm256_fmadd_pd(Ar11,Br1,Cr10);
     Br2 = _mm256_set1_pd(B[2 + 1 * MICROKERNEL_KSIZE]);
     Cr01 = _mm256_fmadd_pd(Ar02,Br2,Cr01);
-    Cr11 = _mm256_fmadd_pd(Ar12,Br2,Cr11);
     Br3 = _mm256_set1_pd(B[3 + 2 * MICROKERNEL_KSIZE]);
     Cr02 = _mm256_fmadd_pd(Ar03,Br3,Cr02);
-    Cr12 = _mm256_fmadd_pd(Ar13,Br3,Cr12);
-    Br4 = _mm256_set1_pd(B[4 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar04,Br4,Cr03);
-    Cr13 = _mm256_fmadd_pd(Ar14,Br4,Cr13);
-    Br5 = _mm256_set1_pd(B[5 + 4 * MICROKERNEL_KSIZE]);
-    Cr04 = _mm256_fmadd_pd(Ar05,Br5,Cr04);
-    Cr14 = _mm256_fmadd_pd(Ar15,Br5,Cr14);
-    Br6 = _mm256_set1_pd(B[6 + 5 * MICROKERNEL_KSIZE]);
-    Cr05 = _mm256_fmadd_pd(Ar06,Br6,Cr05);
-    Cr15 = _mm256_fmadd_pd(Ar16,Br6,Cr15);
-    Br7 = _mm256_set1_pd(B[7 + 6 * MICROKERNEL_KSIZE]);
-    Cr06 = _mm256_fmadd_pd(Ar07,Br7,Cr06);
-    Cr16 = _mm256_fmadd_pd(Ar17,Br7,Cr16);
-    Br0 = _mm256_set1_pd(B[0 + 7 * MICROKERNEL_KSIZE]);
-    Cr07 = _mm256_fmadd_pd(Ar00,Br0,Cr07);
-    Cr17 = _mm256_fmadd_pd(Ar10,Br0,Cr17);
+    Br0 = _mm256_set1_pd(B[0 + 3 * MICROKERNEL_KSIZE]);
+    Cr03 = _mm256_fmadd_pd(Ar00,Br0,Cr03);
+
+    //// 3 th pass
+    Br2 = _mm256_set1_pd(B[2 + 0 * MICROKERNEL_KSIZE]);
+    Cr00 = _mm256_fmadd_pd(Ar02,Br2,Cr00);
+    Br3 = _mm256_set1_pd(B[3 + 1 * MICROKERNEL_KSIZE]);
+    Cr01 = _mm256_fmadd_pd(Ar03,Br3,Cr01);
+    Br0 = _mm256_set1_pd(B[0 + 2 * MICROKERNEL_KSIZE]);
+    Cr02 = _mm256_fmadd_pd(Ar00,Br0,Cr02);
+    Br1 = _mm256_set1_pd(B[1 + 3 * MICROKERNEL_KSIZE]);
+    Cr03 = _mm256_fmadd_pd(Ar01,Br1,Cr03);
+
+    //// 4 th pass
+    Br3 = _mm256_set1_pd(B[3 + 0 * MICROKERNEL_KSIZE]);
+    Cr00 = _mm256_fmadd_pd(Ar03,Br3,Cr00);
+    Br0 = _mm256_set1_pd(B[0 + 1 * MICROKERNEL_KSIZE]);
+    Cr01 = _mm256_fmadd_pd(Ar00,Br0,Cr01);
+    Br1 = _mm256_set1_pd(B[1 + 2 * MICROKERNEL_KSIZE]);
+    Cr02 = _mm256_fmadd_pd(Ar01,Br1,Cr02);
+    Br2 = _mm256_set1_pd(B[2 + 3 * MICROKERNEL_KSIZE]);
+    Cr03 = _mm256_fmadd_pd(Ar02,Br2,Cr03);
 
     //// Store
     _mm256_store_pd(C + 0 + 0 * MICROKERNEL_ISIZE, Cr00);
-    _mm256_store_pd(C + 4 + 0 * MICROKERNEL_ISIZE, Cr10);
     _mm256_store_pd(C + 0 + 1 * MICROKERNEL_ISIZE, Cr01);
-    _mm256_store_pd(C + 4 + 1 * MICROKERNEL_ISIZE, Cr11);
     _mm256_store_pd(C + 0 + 2 * MICROKERNEL_ISIZE, Cr02);
-    _mm256_store_pd(C + 4 + 2 * MICROKERNEL_ISIZE, Cr12);
     _mm256_store_pd(C + 0 + 3 * MICROKERNEL_ISIZE, Cr03);
-    _mm256_store_pd(C + 4 + 3 * MICROKERNEL_ISIZE, Cr13);
-    _mm256_store_pd(C + 0 + 4 * MICROKERNEL_ISIZE, Cr04);
-    _mm256_store_pd(C + 4 + 4 * MICROKERNEL_ISIZE, Cr14);
-    _mm256_store_pd(C + 0 + 5 * MICROKERNEL_ISIZE, Cr05);
-    _mm256_store_pd(C + 4 + 5 * MICROKERNEL_ISIZE, Cr15);
-    _mm256_store_pd(C + 0 + 6 * MICROKERNEL_ISIZE, Cr06);
-    _mm256_store_pd(C + 4 + 6 * MICROKERNEL_ISIZE, Cr16);
-    _mm256_store_pd(C + 0 + 7 * MICROKERNEL_ISIZE, Cr07);
-    _mm256_store_pd(C + 4 + 7 * MICROKERNEL_ISIZE, Cr17);    
 }
 
 
@@ -296,7 +94,7 @@ static void do_block_L1(int lda, int M, int N, int K, double* A, double* B, doub
     for (int j = 0; j < N; j+=MICROKERNEL_ISIZE) {
         for (int k = 0; k < K; k+=MICROKERNEL_KSIZE) {
             for (int i = 0; i < M; i+=MICROKERNEL_ISIZE) {
-                micro_kernel_8by8(A + i*MICROKERNEL_KSIZE + k * M, B + k*MICROKERNEL_ISIZE + j * K, C + i*MICROKERNEL_ISIZE + j * M);
+                micro_kernel_4by4(A + i*MICROKERNEL_KSIZE + k * M, B + k*MICROKERNEL_ISIZE + j * K, C + i*MICROKERNEL_ISIZE + j * M);
             }
         }
     }
@@ -428,7 +226,8 @@ static void copy_back(int lda, int newlda, double* A, double* newA){
                 // Correct block dimensions if block "goes off edge of" the matrix
 
 void square_dgemm(int lda, double* A, double* B, double* C) {
-    int newlda = (((lda-1) / MICROKERNEL_ISIZE) + 1) * MICROKERNEL_ISIZE; // only handles square microkernels
+    int maxsize = max(MICROKERNEL_ISIZE,MICROKERNEL_KSIZE);
+    int newlda = (((lda-1) / maxsize) + 1) * maxsize;
     double* newA = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
     double* newB = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
     double* newC = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
