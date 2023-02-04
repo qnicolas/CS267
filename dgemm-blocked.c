@@ -5,97 +5,90 @@
 const char* dgemm_desc = "Simple blocked dgemm.";
 
 #ifndef L1_BLOCK_SIZE
-#define L1_BLOCK_SIZE 128
+#define L1_BLOCK_SIZE 48
 #endif
 
 #ifndef L2_BLOCK_SIZE
-#define L2_BLOCK_SIZE 512
+#define L2_BLOCK_SIZE 144
 #endif
 
 #ifndef MICROKERNEL_ISIZE
-#define MICROKERNEL_ISIZE 4
-#define MICROKERNEL_KSIZE 4
+#define MICROKERNEL_ISIZE 8
+#define MICROKERNEL_JSIZE 6
 #endif
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
-#define max(a, b) (((a) < (b)) ? (b) : (a))
 
-static void micro_kernel_4by4(double* A, double* B, double* C) {
-    // Declare
-    __m256d Ar00,Ar01,Ar02,Ar03;
-    __m256d Br0,Br1,Br2,Br3;
-    __m256d Cr00,Cr01,Cr02,Cr03;
-    
-    Ar00 = _mm256_load_pd(A + 0 + 0 * MICROKERNEL_ISIZE);
-    Ar01 = _mm256_load_pd(A + 0 + 1 * MICROKERNEL_ISIZE);
-    Ar02 = _mm256_load_pd(A + 0 + 2 * MICROKERNEL_ISIZE);
-    Ar03 = _mm256_load_pd(A + 0 + 3 * MICROKERNEL_ISIZE);
+static void micro_kernel(int M, int K,double* A, double* B, double* C) {
+    __m256d Ar0, Ar1;
+    __m256d Br;
+    __m256d Cr00,Cr01,Cr02,Cr03,Cr04,Cr05,Cr10,Cr11,Cr12,Cr13,Cr14,Cr15;
 
-    Cr00 = _mm256_load_pd(C + 0 + 0 * MICROKERNEL_ISIZE);
-    Cr01 = _mm256_load_pd(C + 0 + 1 * MICROKERNEL_ISIZE);
-    Cr02 = _mm256_load_pd(C + 0 + 2 * MICROKERNEL_ISIZE);
-    Cr03 = _mm256_load_pd(C + 0 + 3 * MICROKERNEL_ISIZE);
+    Cr00 = _mm256_load_pd(C + 0 + 0 * M);
+    Cr10 = _mm256_load_pd(C + 4 + 0 * M);
+    Cr01 = _mm256_load_pd(C + 0 + 1 * M);
+    Cr11 = _mm256_load_pd(C + 4 + 1 * M);
+    Cr02 = _mm256_load_pd(C + 0 + 2 * M);
+    Cr12 = _mm256_load_pd(C + 4 + 2 * M);
+    Cr03 = _mm256_load_pd(C + 0 + 3 * M);
+    Cr13 = _mm256_load_pd(C + 4 + 3 * M);
+    Cr04 = _mm256_load_pd(C + 0 + 4 * M);
+    Cr14 = _mm256_load_pd(C + 4 + 4 * M);
+    Cr05 = _mm256_load_pd(C + 0 + 5 * M);
+    Cr15 = _mm256_load_pd(C + 4 + 5 * M);
 
-    //// 1 th pass
-    Br0 = _mm256_set1_pd(B[0 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar00,Br0,Cr00);
-    Br1 = _mm256_set1_pd(B[1 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar01,Br1,Cr01);
-    Br2 = _mm256_set1_pd(B[2 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar02,Br2,Cr02);
-    Br3 = _mm256_set1_pd(B[3 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar03,Br3,Cr03);
+    for (int k = 0; k<K; ++k){
+        Ar0 = _mm256_load_pd(A + 0 + k * M);
+        Ar1 = _mm256_load_pd(A + 4 + k * M);
 
-    //// 2 th pass
-    Br1 = _mm256_set1_pd(B[1 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar01,Br1,Cr00);
-    Br2 = _mm256_set1_pd(B[2 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar02,Br2,Cr01);
-    Br3 = _mm256_set1_pd(B[3 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar03,Br3,Cr02);
-    Br0 = _mm256_set1_pd(B[0 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar00,Br0,Cr03);
+        Br = _mm256_set1_pd(B[k + 0 * K]);
+        Cr00 = _mm256_fmadd_pd(Ar0,Br,Cr00);
+        Cr10 = _mm256_fmadd_pd(Ar1,Br,Cr10);
 
-    //// 3 th pass
-    Br2 = _mm256_set1_pd(B[2 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar02,Br2,Cr00);
-    Br3 = _mm256_set1_pd(B[3 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar03,Br3,Cr01);
-    Br0 = _mm256_set1_pd(B[0 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar00,Br0,Cr02);
-    Br1 = _mm256_set1_pd(B[1 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar01,Br1,Cr03);
+        Br = _mm256_set1_pd(B[k + 1 * K]);
+        Cr01 = _mm256_fmadd_pd(Ar0,Br,Cr01);
+        Cr11 = _mm256_fmadd_pd(Ar1,Br,Cr11);
 
-    //// 4 th pass
-    Br3 = _mm256_set1_pd(B[3 + 0 * MICROKERNEL_KSIZE]);
-    Cr00 = _mm256_fmadd_pd(Ar03,Br3,Cr00);
-    Br0 = _mm256_set1_pd(B[0 + 1 * MICROKERNEL_KSIZE]);
-    Cr01 = _mm256_fmadd_pd(Ar00,Br0,Cr01);
-    Br1 = _mm256_set1_pd(B[1 + 2 * MICROKERNEL_KSIZE]);
-    Cr02 = _mm256_fmadd_pd(Ar01,Br1,Cr02);
-    Br2 = _mm256_set1_pd(B[2 + 3 * MICROKERNEL_KSIZE]);
-    Cr03 = _mm256_fmadd_pd(Ar02,Br2,Cr03);
+        Br = _mm256_set1_pd(B[k + 2 * K]);
+        Cr02 = _mm256_fmadd_pd(Ar0,Br,Cr02);
+        Cr12 = _mm256_fmadd_pd(Ar1,Br,Cr12);
 
+        Br = _mm256_set1_pd(B[k + 3 * K]);
+        Cr03 = _mm256_fmadd_pd(Ar0,Br,Cr03);
+        Cr13 = _mm256_fmadd_pd(Ar1,Br,Cr13);
+
+        Br = _mm256_set1_pd(B[k + 4 * K]);
+        Cr04 = _mm256_fmadd_pd(Ar0,Br,Cr04);
+        Cr14 = _mm256_fmadd_pd(Ar1,Br,Cr14);
+
+        Br = _mm256_set1_pd(B[k + 5 * K]);
+        Cr05 = _mm256_fmadd_pd(Ar0,Br,Cr05);
+        Cr15 = _mm256_fmadd_pd(Ar1,Br,Cr15);
+   }
     //// Store
-    _mm256_store_pd(C + 0 + 0 * MICROKERNEL_ISIZE, Cr00);
-    _mm256_store_pd(C + 0 + 1 * MICROKERNEL_ISIZE, Cr01);
-    _mm256_store_pd(C + 0 + 2 * MICROKERNEL_ISIZE, Cr02);
-    _mm256_store_pd(C + 0 + 3 * MICROKERNEL_ISIZE, Cr03);
+    _mm256_store_pd(C + 0 + 0 * M, Cr00);
+    _mm256_store_pd(C + 4 + 0 * M, Cr10);
+    _mm256_store_pd(C + 0 + 1 * M, Cr01);
+    _mm256_store_pd(C + 4 + 1 * M, Cr11);
+    _mm256_store_pd(C + 0 + 2 * M, Cr02);
+    _mm256_store_pd(C + 4 + 2 * M, Cr12);
+    _mm256_store_pd(C + 0 + 3 * M, Cr03);
+    _mm256_store_pd(C + 4 + 3 * M, Cr13);
+    _mm256_store_pd(C + 0 + 4 * M, Cr04);
+    _mm256_store_pd(C + 4 + 4 * M, Cr14);
+    _mm256_store_pd(C + 0 + 5 * M, Cr05);
+    _mm256_store_pd(C + 4 + 5 * M, Cr15);
 }
-
 
 /*
  * This auxiliary subroutine performs a smaller dgemm operation
  *  C := C + A * B
  * where C is M-by-N, A is M-by-K, and B is K-by-N.
  */
-
 static void do_block_L1(int lda, int M, int N, int K, double* A, double* B, double* C) {
-    for (int j = 0; j < N; j+=MICROKERNEL_ISIZE) {
-        for (int k = 0; k < K; k+=MICROKERNEL_KSIZE) {
-            for (int i = 0; i < M; i+=MICROKERNEL_ISIZE) {
-                micro_kernel_4by4(A + i*MICROKERNEL_KSIZE + k * M, B + k*MICROKERNEL_ISIZE + j * K, C + i*MICROKERNEL_ISIZE + j * M);
-            }
+    for (int j = 0; j < N; j+=MICROKERNEL_JSIZE) {
+        for (int i = 0; i < M; i+=MICROKERNEL_ISIZE) {
+            micro_kernel(M, K, A + i, B + j * K, C + i + j * M);
         }
     }
 }
@@ -118,31 +111,22 @@ static void do_block_L2(int lda, int M, int N, int K, double* A, double* B, doub
 ////////////////////////// REPACKING //////////////////////////
 ///////////////////////////////////////////////////////////////
 
-static void populate_block_microk(int lda, int M, int N, double* A, double* newA){
+static void populate_block_L1(int lda, int M, int N, int newM, int newN, double* A, double* newA){
+    //printf("%d\n", newM);
     for (int j = 0; j < N; ++j) {
         for (int i = 0; i < M; ++i) {
-            newA[i + j*MICROKERNEL_ISIZE] = A[i+j*lda];
+            newA[i + j*newM] = A[i+j*lda];
         }
     }
     // Pad edges with zeros
     for (int j = 0; j < N; ++j) {
-        for (int i = M; i < MICROKERNEL_ISIZE; ++i) {
-            newA[i + j*MICROKERNEL_ISIZE] = 0.;
+        for (int i = M; i < newM; ++i) {
+            newA[i + j*newM] = 0.;
         }
     }    
-    for (int j = N; j < MICROKERNEL_KSIZE; ++j) {
-        for (int i = 0; i < MICROKERNEL_ISIZE; ++i) {
-            newA[i + j*MICROKERNEL_ISIZE] = 0.;
-        }
-    }
-}
-
-static void populate_block_L1(int lda, int M, int N, int newM, int newN, double* A, double* newA){
-    for (int j = 0; j < N; j += MICROKERNEL_KSIZE) {
-        for (int i = 0; i < M; i += MICROKERNEL_ISIZE) {
-            int M1 = min(MICROKERNEL_ISIZE, M - i);
-            int N1 = min(MICROKERNEL_KSIZE, N - j);
-            populate_block_microk(lda, M1, N1, A + i + j*lda, newA + i*MICROKERNEL_KSIZE + j*newM);
+    for (int j = N; j < newN; ++j) {
+        for (int i = 0; i < newM; ++i) {
+            newA[i + j*newM] = 0.;
         }
     }
 }
@@ -174,20 +158,11 @@ static void create_repacked_copy(int lda, int newlda, double* A, double* newA){
 ///////////////////////////////////////////////////////////////
 ///////////////////// INVERSE REPACKING ///////////////////////
 ///////////////////////////////////////////////////////////////
-static void copy_back_block_microk(int lda, int M, int N, double* A, double* newA){
-    for (int j = 0; j < N; ++j) {
-        for (int i = 0; i < M; ++i) {
-            A[i+j*lda] = newA[i + j*MICROKERNEL_ISIZE];
-        }
-    }
-}
 
 static void copy_back_block_L1(int lda, int M, int N, int newM, double* A, double* newA){
-    for (int j = 0; j < N; j += MICROKERNEL_KSIZE) {
-        for (int i = 0; i < M; i += MICROKERNEL_ISIZE) {
-            int M1 = min(MICROKERNEL_ISIZE, M - i);
-            int N1 = min(MICROKERNEL_KSIZE, N - j);
-            copy_back_block_microk(lda, M1, N1, A + i + j*lda, newA + i*MICROKERNEL_KSIZE + j*newM);
+    for (int j = 0; j < N; ++j) {
+        for (int i = 0; i < M; ++i) {
+            A[i+j*lda] = newA[i + j*newM];
         }
     }
 }
@@ -226,20 +201,15 @@ static void copy_back(int lda, int newlda, double* A, double* newA){
                 // Correct block dimensions if block "goes off edge of" the matrix
 
 void square_dgemm(int lda, double* A, double* B, double* C) {
-    int maxsize = max(MICROKERNEL_ISIZE,MICROKERNEL_KSIZE);
-    int newlda = (((lda-1) / maxsize) + 1) * maxsize;
-    double* newA = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
-    double* newB = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
-    double* newC = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
-    //double* newA = malloc(newlda*newlda*sizeof(double));
-    //double* newB = malloc(newlda*newlda*sizeof(double));
-    //double* newC = malloc(newlda*newlda*sizeof(double));
+    int newlda = (((lda-1) / 24) + 1) * 24; // only handles square microkernels
+    double* newA = (double*) _mm_malloc(newlda*newlda*sizeof(double), 32);
+    double* newB = (double*) _mm_malloc(newlda*newlda*sizeof(double), 32);
+    double* newC = (double*) _mm_malloc(newlda*newlda*sizeof(double), 32);
     create_repacked_copy(lda,newlda,A,newA);
     create_repacked_copy(lda,newlda,B,newB);
     create_repacked_copy(lda,newlda,C,newC);
-    
-    for (int j = 0; j < newlda; j += L2_BLOCK_SIZE) {
-        for (int i = 0; i < newlda; i += L2_BLOCK_SIZE) {
+    for (int i = 0; i < newlda; i += L2_BLOCK_SIZE) {
+        for (int j = 0; j < newlda; j += L2_BLOCK_SIZE) {
             for (int k = 0; k < newlda; k += L2_BLOCK_SIZE) {
                 int M = min(L2_BLOCK_SIZE, newlda - i);
                 int N = min(L2_BLOCK_SIZE, newlda - j);
