@@ -19,6 +19,12 @@ const char* dgemm_desc = "Simple blocked dgemm.";
 
 #define min(a, b) (((a) < (b)) ? (a) : (b))
 
+/*
+ * This auxiliary subroutine multiplies a 8-by-K block of A
+ * and a K-by-6 block of B into a 8-by-6 block of C, using vector
+ * operations and trying to keep the block of C in registers.
+ */
+
 static void micro_kernel(int M, int K,double* A, double* B, double* C) {
     __m256d Ar0, Ar1;
     __m256d Br;
@@ -81,21 +87,28 @@ static void micro_kernel(int M, int K,double* A, double* B, double* C) {
 }
 
 /*
- * This auxiliary subroutine performs a smaller dgemm operation
+ * Perform a smaller dgemm operation (on the smaller 
+ * block sizes that hopefully fit on L1 cache).
  *  C := C + A * B
- * where C is M-by-N, A is M-by-K, and B is K-by-N.
+ * where C is M1-by-N1, A is M1-by-K1, and B is K1-by-N1.
  */
-static void do_block_L1(int lda, int M, int N, int K, double* A, double* B, double* C) {
-    for (int j = 0; j < N; j+=MICROKERNEL_JSIZE) {
-        for (int i = 0; i < M; i+=MICROKERNEL_ISIZE) {
-            micro_kernel(M, K, A + i, B + j * K, C + i + j * M);
+static void do_block_L1(int lda, int M1, int N1, int K1, double* A, double* B, double* C) {
+    for (int j = 0; j < N1; j+=MICROKERNEL_JSIZE) {
+        for (int i = 0; i < M1; i+=MICROKERNEL_ISIZE) {
+            micro_kernel(M1, K1, A + i, B + j * K1, C + i + j * M1);
         }
     }
 }
 
+/*
+ * Perform a smaller dgemm operation (on the bigger 
+ * block sizes that hopefully fit on L2 cache).
+ *  C := C + A * B
+ * where C is M1-by-N1, A is M1-by-K1, and B is K1-by-N1.
+ */
 static void do_block_L2(int lda, int M, int N, int K, double* A, double* B, double* C) {
-    for (int k = 0; k < K; k += L1_BLOCK_SIZE) {
-        for (int j = 0; j < N; j += L1_BLOCK_SIZE) {
+    for (int j = 0; j < N; j += L1_BLOCK_SIZE) {
+        for (int k = 0; k < K; k += L1_BLOCK_SIZE) {
             for (int i = 0; i < M; i += L1_BLOCK_SIZE) {
                 int M1 = min(L1_BLOCK_SIZE, M - i);
                 int N1 = min(L1_BLOCK_SIZE, N - j);
@@ -111,22 +124,27 @@ static void do_block_L2(int lda, int M, int N, int K, double* A, double* B, doub
 ////////////////////////// REPACKING //////////////////////////
 ///////////////////////////////////////////////////////////////
 
-static void populate_block_L1(int lda, int M, int N, int newM, int newN, double* A, double* newA){
+/* These subroutines copy a matrix in column-major-order layout
+ * into a matrix in block-contiguous form, where edges are padded with zeros
+ * so that its length is a multiple of 24
+ */
+
+static void populate_block_L1(int lda, int M1, int N1, int newM1, int newN1, double* A, double* newA){
     //printf("%d\n", newM);
-    for (int j = 0; j < N; ++j) {
-        for (int i = 0; i < M; ++i) {
-            newA[i + j*newM] = A[i+j*lda];
+    for (int j = 0; j < N1; ++j) {
+        for (int i = 0; i < M1; ++i) {
+            newA[i + j*newM1] = A[i+j*lda];
         }
     }
     // Pad edges with zeros
-    for (int j = 0; j < N; ++j) {
-        for (int i = M; i < newM; ++i) {
-            newA[i + j*newM] = 0.;
+    for (int j = 0; j < N1; ++j) {
+        for (int i = M1; i < newM1; ++i) {
+            newA[i + j*newM1] = 0.;
         }
     }    
-    for (int j = N; j < newN; ++j) {
-        for (int i = 0; i < newM; ++i) {
-            newA[i + j*newM] = 0.;
+    for (int j = N1; j < newN1; ++j) {
+        for (int i = 0; i < newM1; ++i) {
+            newA[i + j*newM1] = 0.;
         }
     }
 }
@@ -159,10 +177,13 @@ static void create_repacked_copy(int lda, int newlda, double* A, double* newA){
 ///////////////////// INVERSE REPACKING ///////////////////////
 ///////////////////////////////////////////////////////////////
 
-static void copy_back_block_L1(int lda, int M, int N, int newM, double* A, double* newA){
-    for (int j = 0; j < N; ++j) {
-        for (int i = 0; i < M; ++i) {
-            A[i+j*lda] = newA[i + j*newM];
+/* These subroutines copy a repacked matrix back to its original column-major-order layout
+ */
+
+static void copy_back_block_L1(int lda, int M1, int N1, int newM1, double* A, double* newA){
+    for (int j = 0; j < N1; ++j) {
+        for (int i = 0; i < M1; ++i) {
+            A[i+j*lda] = newA[i + j*newM1];
         }
     }
 }
@@ -194,23 +215,30 @@ static void copy_back(int lda, int newlda, double* A, double* newA){
 /* This routine performs a dgemm operation
  *  C := C + A * B
  * where A, B, and C are lda-by-lda matrices stored in column-major format.
- * On exit, A and B maintain their input values. */
+ * On exit, A and B maintain their input values.
+ */
     // For each block-row of A
         // For each block-column of B
             // Accumulate block dgemms into block of C
                 // Correct block dimensions if block "goes off edge of" the matrix
 
 void square_dgemm(int lda, double* A, double* B, double* C) {
-    int newlda = (((lda-1) / 24) + 1) * 24; // only handles square microkernels
-    double* newA = (double*) _mm_malloc(newlda*newlda*sizeof(double), 32);
-    double* newB = (double*) _mm_malloc(newlda*newlda*sizeof(double), 32);
-    double* newC = (double*) _mm_malloc(newlda*newlda*sizeof(double), 32);
+    // First, repack the matrices in block-contiguous order (see writeup for details).
+    // Define their new length as a multiple of 24 (so that they divide exactly into blocks 
+    // of size 8 by 6, the microkernel size).
+    int newlda = (((lda-1) / 24) + 1) * 24; 
+    double* newA = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
+    double* newB = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
+    double* newC = (double*) _mm_malloc(newlda*newlda*sizeof(double), 64);
     create_repacked_copy(lda,newlda,A,newA);
     create_repacked_copy(lda,newlda,B,newB);
     create_repacked_copy(lda,newlda,C,newC);
-    for (int i = 0; i < newlda; i += L2_BLOCK_SIZE) {
-        for (int j = 0; j < newlda; j += L2_BLOCK_SIZE) {
-            for (int k = 0; k < newlda; k += L2_BLOCK_SIZE) {
+    // For each block-column of B and C
+    for (int j = 0; j < newlda; j += L2_BLOCK_SIZE) {
+        // For each block-column of A, block-row of B
+        for (int k = 0; k < newlda; k += L2_BLOCK_SIZE) {
+            // For each block-row of A and C
+            for (int i = 0; i < newlda; i += L2_BLOCK_SIZE) {
                 int M = min(L2_BLOCK_SIZE, newlda - i);
                 int N = min(L2_BLOCK_SIZE, newlda - j);
                 int K = min(L2_BLOCK_SIZE, newlda - k);
@@ -219,9 +247,9 @@ void square_dgemm(int lda, double* A, double* B, double* C) {
             }
         }
     }
+    // Copy C back into column-major order 
     copy_back(lda,newlda,C,newC);
     _mm_free(newA);
     _mm_free(newB);
     _mm_free(newC);
-    //printf("computed4\n");
 }
